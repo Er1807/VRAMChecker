@@ -20,6 +20,7 @@ namespace VRAMChecker
             { TextureFormat.RGB565, 16},
             { TextureFormat.R16, 16},
             { TextureFormat.DXT1, 4},
+            { (TextureFormat)11, 8}, //not working
             { TextureFormat.DXT5, 8},
             { TextureFormat.RGBA4444, 4*4},
             { TextureFormat.BGRA32, 8*4},

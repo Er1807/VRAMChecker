@@ -11,7 +11,7 @@ using VRC;
 using VRC.DataModel;
 using VRC.UI.Elements.Menus;
 
-[assembly: MelonInfo(typeof(VRAMCheckerMod), "VRAM Checker", "1.0.2", "Eric Fandenfart")]
+[assembly: MelonInfo(typeof(VRAMCheckerMod), "VRAM Checker", "1.0.3", "Eric Fandenfart")]
 [assembly: MelonGame]
 namespace VRAMChecker
 {

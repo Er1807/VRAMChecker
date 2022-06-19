@@ -29,7 +29,7 @@ namespace VRAMChecker
         public override void OnUiManagerInit(UiManager uiManager)
         {
             VRAMCheckerInternal.LoggerInst = LoggerInst;
-            LoggerInst.Msg("Loading VRAM Addon v1.0.2");
+            LoggerInst.Msg("Loading VRAM Addon v1.0.3");
             MelonCoroutines.Start(InitQuickMenu());
 
         }
