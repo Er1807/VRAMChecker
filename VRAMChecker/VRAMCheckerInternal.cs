@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Profiling;
+using UnityEngine.SceneManagement;
 using VRC;
 
 namespace VRAMChecker
@@ -95,6 +96,26 @@ namespace VRAMChecker
                 LoggerInst.Msg($"{ player.field_Private_APIUser_0.displayName}({ player.field_Private_APIUser_0.id}) : Total: {sizes.size} OnlyActive; {sizes.sizeOnlyActive}");
 
             }
+        }
+
+        public void LogWorld()
+        {
+            LoggerInst.Msg("Vram Sizes of World Objects");
+            long sumVRamSize = 0;
+            long sumVRamSizeOnlyActive = 0;
+            foreach (var obj in SceneManager.GetActiveScene().GetRootGameObjects())
+            {
+                if (obj.GetComponent<Player>() != null)
+                    continue;
+                
+                var sizes = GetSizeForGameObject(obj);
+                sumVRamSize += VRAMSize;
+                sumVRamSizeOnlyActive += VRAMSizeOnlyActive;
+
+                LoggerInst.Msg($"{obj.name}: Total: {sizes.size} OnlyActive; {sizes.sizeOnlyActive}");
+
+            }
+            LoggerInst.Msg($"Sum: Total: {ToByteString(sumVRamSize)} OnlyActive; {ToByteString(sumVRamSizeOnlyActive)}");
         }
 
         public (string size, string sizeOnlyActive) GetSizeForGameObject(GameObject avatar)

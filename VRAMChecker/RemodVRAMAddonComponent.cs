@@ -50,6 +50,8 @@ namespace VRAMChecker
 
             ReMenuPage avatarPage = new ReMenuPage(QuickMenuEx.Instance.field_Public_Transform_0.Find("Window/QMParent/Menu_Avatars"));
             avatarPage.AddButton("Log VRAM", $"Logs the VRAM size of all avatars", VRAMChecker.LogInstance, ResourceManager.GetSprite("remod.ram"));
+            new ReMenuButton("Log VRAM", $"Logs the VRAM size of this World", VRAMChecker.LogWorld, QuickMenuEx.Instance.transform.Find("Container/Window/QMParent/Menu_Here/ScrollRect/Viewport/VerticalLayoutGroup/Buttons_WorldActions"), ResourceManager.GetSprite("remod.ram"));
+
 
             LoggerInst.Msg("Added Buttons");
         }
