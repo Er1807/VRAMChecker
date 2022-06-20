@@ -11,7 +11,7 @@ namespace VRAMChecker
 {
     public class VRAMCheckerInternal
     {
-        public const string Version = "1.0.4";
+        public const string Version = "1.0.5";
             
         private static Dictionary<TextureFormat, int> BPP = new Dictionary<TextureFormat, int>()
         {
