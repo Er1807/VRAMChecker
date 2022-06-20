@@ -83,22 +83,25 @@ namespace VRAMChecker
             LoggerInst = loggerInst;
         }
 
-        public static void LogInstance(MelonLogger.Instance instance)
+        public void LogInstance()
         {
-            instance.Msg("Vram Sizes of Avatars in Lobby");
+            LoggerInst.Msg("Vram Sizes of Avatars in Lobby");
             foreach (Player player in PlayerManager.field_Private_Static_PlayerManager_0.field_Private_List_1_Player_0)
             {
                 var avatarGameobj = player._vrcplayer.field_Internal_GameObject_0;
-                var sizes = new VRAMCheckerInternal(instance).GetSizeForGameObject(avatarGameobj);
+                var sizes = GetSizeForGameObject(avatarGameobj);
 
 
-                instance.Msg($"{ player.field_Private_APIUser_0.displayName}({ player.field_Private_APIUser_0.id}) : Total: {sizes.size} OnlyActive; {sizes.sizeOnlyActive}");
+                LoggerInst.Msg($"{ player.field_Private_APIUser_0.displayName}({ player.field_Private_APIUser_0.id}) : Total: {sizes.size} OnlyActive; {sizes.sizeOnlyActive}");
 
             }
         }
 
         public (string size, string sizeOnlyActive) GetSizeForGameObject(GameObject avatar)
         {
+            VRAMSize = 0;
+            VRAMSizeOnlyActive = 0;
+            done.Clear();
             foreach (var item in avatar.GetComponentsInChildren<MeshRenderer>(true))
             {
                 GetSizeForRenderer(item);

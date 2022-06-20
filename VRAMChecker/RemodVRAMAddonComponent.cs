@@ -15,14 +15,15 @@ namespace VRAMChecker
     {
         internal static MelonLogger.Instance LoggerInst = new MelonLogger.Instance("ReMod-VRAM", ConsoleColor.DarkBlue);
         private static ReMenuButton buttonSize, buttonSizeActive;
-        
+        private VRAMCheckerInternal VRAMChecker;
+
         public override void OnSelectUser(IUser user, bool isRemote)
         {
             string userid = user.GetUserID();
             foreach (Player player in PlayerManager.field_Private_Static_PlayerManager_0.field_Private_List_1_Player_0)
                 if (player.prop_APIUser_0.id == userid)
                 {
-                    var sizes = new VRAMCheckerInternal(LoggerInst).GetSizeForGameObject(player._vrcplayer.field_Internal_GameObject_0);
+                    var sizes = VRAMChecker.GetSizeForGameObject(player._vrcplayer.field_Internal_GameObject_0);
                     buttonSize.Text = $"VRAM\n{sizes.size}";
                     buttonSizeActive.Text = $"VRAM (A)\n{sizes.sizeOnlyActive}";
                     break;
@@ -32,11 +33,12 @@ namespace VRAMChecker
         public override void OnUiManagerInit(UiManager uiManager)
         {
             LoggerInst.Msg($"Loading VRAM Addon v{VRAMCheckerInternal.Version}");
+            VRAMChecker = new VRAMCheckerInternal(LoggerInst);
             MelonCoroutines.Start(InitQuickMenu());
 
         }
 
-        public static IEnumerator InitQuickMenu()
+        public IEnumerator InitQuickMenu()
         {
             while (GameObject.Find("UserInterface").GetComponentInChildren<VRC.UI.Elements.QuickMenu>(true) == null) yield return null;
 
@@ -47,18 +49,18 @@ namespace VRAMChecker
 
 
             ReMenuPage avatarPage = new ReMenuPage(QuickMenuEx.Instance.field_Public_Transform_0.Find("Window/QMParent/Menu_Avatars"));
-            avatarPage.AddButton("Log VRAM", $"Logs the VRAM size of all avatars", () => VRAMCheckerInternal.LogInstance(LoggerInst), ResourceManager.GetSprite("remod.ram"));
+            avatarPage.AddButton("Log VRAM", $"Logs the VRAM size of all avatars", VRAMChecker.LogInstance, ResourceManager.GetSprite("remod.ram"));
 
             LoggerInst.Msg("Added Buttons");
         }
 
-        public static void ButtonClick()
+        public void ButtonClick()
         {
             string userid = QuickMenuEx.SelectedUserLocal.field_Private_IUser_0.GetUserID();
             foreach (Player player in PlayerManager.field_Private_Static_PlayerManager_0.field_Private_List_1_Player_0)
                 if (player.prop_APIUser_0.id == userid)
                 {
-                    var sizes = new VRAMCheckerInternal(LoggerInst).GetSizeForGameObject(player._vrcplayer.field_Internal_GameObject_0);
+                    var sizes = VRAMChecker.GetSizeForGameObject(player._vrcplayer.field_Internal_GameObject_0);
                     buttonSize.Text = $"VRAM\n{sizes.size}";
                     buttonSizeActive.Text = $"VRAM (A)\n{sizes.sizeOnlyActive}";
                     break;
