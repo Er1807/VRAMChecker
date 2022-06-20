@@ -75,7 +75,7 @@ namespace VRAMChecker
         };
 
         private MelonLogger.Instance LoggerInst;
-        private List<IntPtr> done = new List<IntPtr>();
+        private Dictionary<IntPtr, (Texture2D, bool)> textures = new Dictionary<IntPtr, (Texture2D, bool)>();
         long VRAMSize = 0;
         long VRAMSizeOnlyActive = 0;
 
@@ -122,7 +122,7 @@ namespace VRAMChecker
         {
             VRAMSize = 0;
             VRAMSizeOnlyActive = 0;
-            done.Clear();
+            textures.Clear();
             foreach (var item in avatar.GetComponentsInChildren<MeshRenderer>(true))
             {
                 GetSizeForRenderer(item);
@@ -136,6 +136,11 @@ namespace VRAMChecker
                 GetSizeForMesh(item.mesh, item.gameObject.activeInHierarchy);
             }
 
+            foreach (var item in textures)
+            {
+                GetSizeForTexture(item.Value.Item1, item.Value.Item2);
+            }
+
             return (ToByteString(VRAMSize), ToByteString(VRAMSizeOnlyActive));
         }
 
@@ -143,7 +148,7 @@ namespace VRAMChecker
         {
             foreach (var mat in renderer.materials)
             {
-                GetSizeForMaterial(mat, renderer.gameObject.activeInHierarchy);
+                CollectMaterial(mat, renderer.gameObject.activeInHierarchy);
             }
             GetSizeForMesh(renderer.sharedMesh, renderer.gameObject.activeInHierarchy);
         }
@@ -152,7 +157,7 @@ namespace VRAMChecker
         {
             foreach (var mat in renderer.materials)
             {
-                GetSizeForMaterial(mat, renderer.gameObject.activeInHierarchy);
+                CollectMaterial(mat, renderer.gameObject.activeInHierarchy);
             }
         }
 
@@ -166,7 +171,7 @@ namespace VRAMChecker
                 VRAMSizeOnlyActive += total;
         }
 
-        private void GetSizeForMaterial(Material mat, bool isActive)
+        private void CollectMaterial(Material mat, bool isActive)
         {
             if (mat == null) return;
             var texIds = mat.GetTexturePropertyNames();
@@ -177,7 +182,7 @@ namespace VRAMChecker
                     var test = mat.GetTexture(id);
                     if (test == null)
                         continue;
-                    GetSizeForTexture(test.Cast<Texture2D>(), isActive);
+                    CollectTexture(test.Cast<Texture2D>(), isActive);
                 }
                 catch (Exception)
                 {
@@ -185,11 +190,22 @@ namespace VRAMChecker
             }
         }
 
-        private void GetSizeForTexture(Texture2D tex, bool isActive)
+        private void CollectTexture(Texture2D tex, bool isActive)
         {
             if (tex == null) return;
-            if (done.Contains(tex.Pointer)) return;
-            done.Add(tex.Pointer);
+            if (!textures.ContainsKey(tex.Pointer)){
+                textures[tex.Pointer] = (tex, isActive);
+                return;
+            }
+            if (!textures[tex.Pointer].Item2)
+            {
+                textures[tex.Pointer] = (tex, isActive);
+            }
+            
+        }
+
+        private void GetSizeForTexture(Texture2D tex, bool isActive)
+        {
             TextureFormat textureFormat = tex.format;
 
             if (!BPP.ContainsKey(tex.format))
