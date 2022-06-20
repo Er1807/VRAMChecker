@@ -10,7 +10,9 @@ namespace VRAMChecker
 {
     public class VRAMCheckerInternal
     {
-        public static Dictionary<TextureFormat, int> BPP = new Dictionary<TextureFormat, int>()
+        public const string Version = "1.0.4";
+            
+        private static Dictionary<TextureFormat, int> BPP = new Dictionary<TextureFormat, int>()
         {
             { TextureFormat.Alpha8, 8},
             { TextureFormat.ARGB4444, 16},
@@ -71,75 +73,79 @@ namespace VRAMChecker
             { TextureFormat.RGBA64, 16*4}
         };
 
-        internal static MelonLogger.Instance LoggerInst;
+        private MelonLogger.Instance LoggerInst;
+        private List<IntPtr> done = new List<IntPtr>();
+        long VRAMSize = 0;
+        long VRAMSizeOnlyActive = 0;
 
-        public static void LogInstance()
+        public VRAMCheckerInternal(MelonLogger.Instance loggerInst)
         {
-            LoggerInst.Msg("Vram Sizes of Avatars in Lobby");
+            LoggerInst = loggerInst;
+        }
+
+        public static void LogInstance(MelonLogger.Instance instance)
+        {
+            instance.Msg("Vram Sizes of Avatars in Lobby");
             foreach (Player player in PlayerManager.field_Private_Static_PlayerManager_0.field_Private_List_1_Player_0)
             {
                 var avatarGameobj = player._vrcplayer.field_Internal_GameObject_0;
-                LoggerInst.Msg($"{ player.field_Private_APIUser_0.displayName}({ player.field_Private_APIUser_0.id}) : {GetSizeForAvatar(avatarGameobj)}");
+                var sizes = new VRAMCheckerInternal(instance).GetSizeForGameObject(avatarGameobj);
+
+
+                instance.Msg($"{ player.field_Private_APIUser_0.displayName}({ player.field_Private_APIUser_0.id}) : Total: {sizes.size} OnlyActive; {sizes.sizeOnlyActive}");
 
             }
         }
 
-        public static string GetSizeForAvatar(GameObject avatar)
+        public (string size, string sizeOnlyActive) GetSizeForGameObject(GameObject avatar)
         {
-            done.Clear();
-            long sum = 0;
-
             foreach (var item in avatar.GetComponentsInChildren<MeshRenderer>(true))
             {
-                sum += GetSizeForRenderer(item);
+                GetSizeForRenderer(item);
             }
             foreach (var item in avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
-                sum += GetSizeForRenderer(item);
+                GetSizeForRenderer(item);
             }
             foreach (var item in avatar.GetComponentsInChildren<MeshFilter>(true))
             {
-                sum += GetSizeForMesh(item.mesh);
+                GetSizeForMesh(item.mesh, item.gameObject.activeInHierarchy);
             }
 
-            return ToByteString(sum);
+            return (ToByteString(VRAMSize), ToByteString(VRAMSizeOnlyActive));
         }
 
-        public static long GetSizeForRenderer(SkinnedMeshRenderer renderer)
+        private void GetSizeForRenderer(SkinnedMeshRenderer renderer)
         {
-            long sum = 0;
             foreach (var mat in renderer.materials)
             {
-                sum += GetSizeForMaterial(mat);
+                GetSizeForMaterial(mat, renderer.gameObject.activeInHierarchy);
             }
-            sum += GetSizeForMesh(renderer.sharedMesh);
-            return sum;
+            GetSizeForMesh(renderer.sharedMesh, renderer.gameObject.activeInHierarchy);
         }
 
-        public static long GetSizeForRenderer(MeshRenderer renderer)
+        private void GetSizeForRenderer(MeshRenderer renderer)
         {
-
-            long sum = 0;
             foreach (var mat in renderer.materials)
             {
-                sum += GetSizeForMaterial(mat);
+                GetSizeForMaterial(mat, renderer.gameObject.activeInHierarchy);
             }
-            return sum;
         }
 
-        public static long GetSizeForMesh(Mesh mesh)
+        private void GetSizeForMesh(Mesh mesh, bool isActive)
         {
-            if (mesh == null) return 0;
+            if (mesh == null) return;
             var total = Profiler.GetRuntimeMemorySizeLong(mesh);
             //LoggerInst.Msg($"DEBUG: Mesh: {mesh.name} Profiler.GetRuntimeMemorySizeLong(mesh): {total}");
-            return total;
+            VRAMSize += total;
+            if(isActive)
+                VRAMSizeOnlyActive += total;
         }
 
-        public static long GetSizeForMaterial(Material mat)
+        private void GetSizeForMaterial(Material mat, bool isActive)
         {
-            if (mat == null) return 0;
+            if (mat == null) return;
             var texIds = mat.GetTexturePropertyNames();
-            long sum = 0;
             foreach (var id in texIds)
             {
                 try
@@ -147,41 +153,37 @@ namespace VRAMChecker
                     var test = mat.GetTexture(id);
                     if (test == null)
                         continue;
-                    sum += GetSizeForTexture(test.Cast<Texture2D>());
+                    GetSizeForTexture(test.Cast<Texture2D>(), isActive);
                 }
                 catch (Exception)
                 {
-
                 }
             }
-            return sum;
         }
-        public static List<IntPtr> done = new List<IntPtr>();
 
-        public static long GetSizeForTexture(Texture2D tex)
+        private void GetSizeForTexture(Texture2D tex, bool isActive)
         {
-            if (tex == null) return 0;
-            if (done.Contains(tex.Pointer)) return 0;
+            if (tex == null) return;
+            if (done.Contains(tex.Pointer)) return;
             done.Add(tex.Pointer);
             TextureFormat textureFormat = tex.format;
 
-            if (BPP.ContainsKey(tex.format))
-            {
-                double mipmaps = 1;
-                for (int i = 0; i < tex.mipmapCount; i++) mipmaps += Math.Pow(0.25, i + 1);
-                var bytesCount = (long)(BPP[textureFormat] * tex.width * tex.height * mipmaps / 8);
-                //LoggerInst.Msg($"DEBUG: Texture {tex.name} {BPP[textureFormat]}  {tex.width}   {tex.height}   {mipmaps}  {tex.mipmapCount} -> {bytesCount}");
-
-                return bytesCount;
-            }
-            else
+            if (!BPP.ContainsKey(tex.format))
             {
                 LoggerInst.Warning("Does not have BPP for " + textureFormat);
-                return 0;
+                return;
             }
+            
+            double mipmaps = 1;
+            for (int i = 0; i < tex.mipmapCount; i++) mipmaps += Math.Pow(0.25, i + 1);
+            var bytesCount = (long)(BPP[textureFormat] * tex.width * tex.height * mipmaps / 8);
+            //LoggerInst.Msg($"DEBUG: Texture {tex.name} {BPP[textureFormat]}  {tex.width}   {tex.height}   {mipmaps}  {tex.mipmapCount} -> {bytesCount}");
+            VRAMSize += bytesCount;
+            if (isActive)
+                VRAMSizeOnlyActive += bytesCount;
         }
 
-        public static string ToByteString(long l)
+        private static string ToByteString(long l)
         {
             if (l < 1000) return l + " B";
             if (l < 1000000) return (l / 1000f).ToString("n2") + " KB";

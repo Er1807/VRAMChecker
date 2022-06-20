@@ -11,19 +11,20 @@ using VRC;
 using VRC.DataModel;
 using VRC.UI.Elements.Menus;
 
-[assembly: MelonInfo(typeof(VRAMCheckerMod), "VRAM Checker", "1.0.3", "Eric Fandenfart")]
+[assembly: MelonInfo(typeof(VRAMCheckerMod), "VRAM Checker", VRAMCheckerInternal.Version, "Eric Fandenfart")]
 [assembly: MelonGame]
 namespace VRAMChecker
 {
 
     internal class VRAMCheckerMod : MelonMod
     {
-        private static ReMenuButton button;
+        private static ReMenuButton buttonSize, buttonSizeActive;
+        private static MelonLogger.Instance LoggerInst;
 
         public override void OnApplicationStart()
         {
-            VRAMCheckerInternal.LoggerInst = LoggerInstance;
-            LoggerInstance.Msg("Loading VRAMCheckerMod v1.0.0");
+            LoggerInst = LoggerInstance;
+            LoggerInst.Msg($"Loading VRAMCheckerMod v{VRAMCheckerInternal.Version}");
             MelonCoroutines.Start(InitQuickMenu());
 
             foreach (var method in typeof(SelectedUserMenuQM).GetMethods())
@@ -44,7 +45,9 @@ namespace VRAMChecker
             foreach (Player player in PlayerManager.field_Private_Static_PlayerManager_0.field_Private_List_1_Player_0)
                 if (player.prop_APIUser_0.id == userid)
                 {
-                    button.Text = $"VRAM\n{VRAMCheckerInternal.GetSizeForAvatar(player._vrcplayer.field_Internal_GameObject_0)}";
+                    var sizes = new VRAMCheckerInternal(LoggerInst).GetSizeForGameObject(player._vrcplayer.field_Internal_GameObject_0);
+                    buttonSize.Text = $"VRAM\n{sizes.size}";
+                    buttonSizeActive.Text = $"VRAM (A)\n{sizes.sizeOnlyActive}";
                 }
         }
 
@@ -52,9 +55,10 @@ namespace VRAMChecker
         {
             while (GameObject.Find("UserInterface")?.GetComponentInChildren<VRC.UI.Elements.QuickMenu>(true) == null) yield return null;
 
-            button = new ReMenuButton("VRAM\n-", "Click to recalculate VRAM size of avatar", ButtonClick, QuickMenuEx.SelectedUserLocal.transform.Find("ScrollRect/Viewport/VerticalLayoutGroup/Buttons_UserActions"), ResourceManager.GetSprite("remod.ram"));
-            
-            new ReMenuButton("Log VRAM", $"Logs the VRAM size of all avatars", VRAMCheckerInternal.LogInstance, QuickMenuEx.Instance.transform.Find("Container/Window/QMParent/Menu_Settings/Panel_QM_ScrollRect/Viewport/VerticalLayoutGroup/Buttons_Comfort"), ResourceManager.GetSprite("remod.ram"));
+            buttonSize = new ReMenuButton("VRAM\n-", "Click to recalculate VRAM size of avatar", ButtonClick, QuickMenuEx.SelectedUserLocal.transform.Find("ScrollRect/Viewport/VerticalLayoutGroup/Buttons_UserActions"), ResourceManager.GetSprite("remod.ram"));
+            buttonSizeActive = new ReMenuButton("VRAM (A)\n-", "Click to recalculate VRAM size of avatar", ButtonClick, QuickMenuEx.SelectedUserLocal.transform.Find("ScrollRect/Viewport/VerticalLayoutGroup/Buttons_UserActions"), ResourceManager.GetSprite("remod.ram"));
+
+            new ReMenuButton("Log VRAM", $"Logs the VRAM size of all avatars", () => VRAMCheckerInternal.LogInstance(LoggerInst), QuickMenuEx.Instance.transform.Find("Container/Window/QMParent/Menu_Settings/Panel_QM_ScrollRect/Viewport/VerticalLayoutGroup/Buttons_Comfort"), ResourceManager.GetSprite("remod.ram"));
             
             LoggerInstance.Msg("Added Buttons");
         }
@@ -64,7 +68,11 @@ namespace VRAMChecker
             string userid = QuickMenuEx.SelectedUserLocal.field_Private_IUser_0.GetUserID();
             foreach (Player player in PlayerManager.field_Private_Static_PlayerManager_0.field_Private_List_1_Player_0)
                 if (player.prop_APIUser_0.id == userid)
-                    button.Text = $"VRAM\n{VRAMCheckerInternal.GetSizeForAvatar(player._vrcplayer.field_Internal_GameObject_0)}";
+                {
+                    var sizes = new VRAMCheckerInternal(LoggerInst).GetSizeForGameObject(player._vrcplayer.field_Internal_GameObject_0);
+                    buttonSize.Text = $"VRAM\n{sizes.size}";
+                    buttonSizeActive.Text = $"VRAM (A)\n{sizes.sizeOnlyActive}";
+                }
         }
     }
 }
