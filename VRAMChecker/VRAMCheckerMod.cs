@@ -59,7 +59,8 @@ namespace VRAMChecker
             buttonSizeActive = new ReMenuButton("VRAM (A)\n-", "Click to recalculate VRAM size of avatar", ButtonClick, QuickMenuEx.SelectedUserLocal.transform.Find("ScrollRect/Viewport/VerticalLayoutGroup/Buttons_UserActions"), ResourceManager.GetSprite("remod.ram"));
 
             new ReMenuButton("Log VRAM", $"Logs the VRAM size of all avatars", VRAMChecker.LogInstance, QuickMenuEx.Instance.transform.Find("Container/Window/QMParent/Menu_Settings/Panel_QM_ScrollRect/Viewport/VerticalLayoutGroup/Buttons_Comfort"), ResourceManager.GetSprite("remod.ram"));
-            
+            new ReMenuButton("Log VRAM", $"Logs the VRAM size of this World", VRAMChecker.LogWorld, QuickMenuEx.Instance.transform.Find("Container/Window/QMParent/Menu_Here/ScrollRect/Viewport/VerticalLayoutGroup/Buttons_WorldActions"), ResourceManager.GetSprite("remod.ram"));
+
             LoggerInstance.Msg("Added Buttons");
         }
 
