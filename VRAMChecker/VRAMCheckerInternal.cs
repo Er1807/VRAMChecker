@@ -6,13 +6,34 @@ using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.SceneManagement;
 using VRC;
+using System.Linq;
 
 namespace VRAMChecker
 {
+
+    public class AvatarStat
+    {
+
+
+        public string Name, UserID;
+        public long VRAM, VRAMActiveOnly;
+
+        public AvatarStat(string name, string userID, long vRAM, long vRAMActiveOnly)
+        {
+            Name = name;
+            UserID = userID;
+            VRAM = vRAM;
+            VRAMActiveOnly = vRAMActiveOnly;
+        }
+
+        public string VRAMString => VRAMCheckerInternal.ToByteString(VRAM);
+        public string VRAMActiveOnlyString => VRAMCheckerInternal.ToByteString(VRAMActiveOnly);
+    }
+
     public class VRAMCheckerInternal
     {
         public const string Version = "1.0.5";
-            
+
         private static Dictionary<TextureFormat, int> BPP = new Dictionary<TextureFormat, int>()
         {
             { TextureFormat.Alpha8, 8},
@@ -84,18 +105,25 @@ namespace VRAMChecker
             LoggerInst = loggerInst;
         }
 
+
+
         public void LogInstance()
         {
             LoggerInst.Msg("Vram Sizes of Avatars in Lobby");
+            List<AvatarStat> avatarstats = new List<AvatarStat>();
+
             foreach (Player player in PlayerManager.field_Private_Static_PlayerManager_0.field_Private_List_1_Player_0)
             {
                 var avatarGameobj = player._vrcplayer.field_Internal_GameObject_0;
-                var sizes = GetSizeForGameObject(avatarGameobj);
-
-
-                LoggerInst.Msg($"{ player.field_Private_APIUser_0.displayName}({ player.field_Private_APIUser_0.id}) : Total: {sizes.size} OnlyActive; {sizes.sizeOnlyActive}");
-
+                GetSizeForGameObject(avatarGameobj);
+                avatarstats.Add(new AvatarStat(player.field_Private_APIUser_0.displayName, player.field_Private_APIUser_0.id, VRAMSize, VRAMSizeOnlyActive));
             }
+
+            foreach (var stat in avatarstats.OrderByDescending(x => x.VRAM))
+            {
+                LoggerInst.Msg($"{stat.Name}({stat.UserID}) : Total: {stat.VRAMString} OnlyActive; {stat.VRAMActiveOnlyString}");
+            }
+            LoggerInst.Msg($"Total Avatars : Total: {ToByteString(avatarstats.Sum(x=>x.VRAM))} OnlyActive; {ToByteString(avatarstats.Sum(x=>x.VRAMActiveOnly))}");
         }
 
         public void LogWorld()
@@ -107,7 +135,7 @@ namespace VRAMChecker
             {
                 if (obj.GetComponent<Player>() != null)
                     continue;
-                
+
                 var sizes = GetSizeForGameObject(obj);
                 sumVRamSize += VRAMSize;
                 sumVRamSizeOnlyActive += VRAMSizeOnlyActive;
@@ -167,7 +195,7 @@ namespace VRAMChecker
             var total = Profiler.GetRuntimeMemorySizeLong(mesh);
             //LoggerInst.Msg($"DEBUG: Mesh: {mesh.name} Profiler.GetRuntimeMemorySizeLong(mesh): {total}");
             VRAMSize += total;
-            if(isActive)
+            if (isActive)
                 VRAMSizeOnlyActive += total;
         }
 
@@ -193,7 +221,8 @@ namespace VRAMChecker
         private void CollectTexture(Texture2D tex, bool isActive)
         {
             if (tex == null) return;
-            if (!textures.ContainsKey(tex.Pointer)){
+            if (!textures.ContainsKey(tex.Pointer))
+            {
                 textures[tex.Pointer] = (tex, isActive);
                 return;
             }
@@ -201,7 +230,7 @@ namespace VRAMChecker
             {
                 textures[tex.Pointer] = (tex, isActive);
             }
-            
+
         }
 
         private void GetSizeForTexture(Texture2D tex, bool isActive)
@@ -213,7 +242,7 @@ namespace VRAMChecker
                 LoggerInst.Warning("Does not have BPP for " + textureFormat);
                 return;
             }
-            
+
             double mipmaps = 1;
             for (int i = 0; i < tex.mipmapCount; i++) mipmaps += Math.Pow(0.25, i + 1);
             var bytesCount = (long)(BPP[textureFormat] * tex.width * tex.height * mipmaps / 8);
@@ -223,7 +252,7 @@ namespace VRAMChecker
                 VRAMSizeOnlyActive += bytesCount;
         }
 
-        private static string ToByteString(long l)
+        public static string ToByteString(long l)
         {
             if (l < 1000) return l + " B";
             if (l < 1000000) return (l / 1000f).ToString("n2") + " KB";
