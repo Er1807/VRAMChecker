@@ -7,33 +7,23 @@ using UnityEngine.Profiling;
 using UnityEngine.SceneManagement;
 using VRC;
 using System.Linq;
+using UnidecodeSharpFork;
+using System.IO;
+using AssetsTools.NET;
+using TextureFormat = UnityEngine.TextureFormat;
+using System.Security.Cryptography;
+using System.Text;
+using AssetsTools.NET.Extra;
+using System.Text.RegularExpressions;
 
 namespace VRAMChecker
 {
 
-    public class AvatarStat
-    {
-
-
-        public string Name, UserID;
-        public long VRAM, VRAMActiveOnly;
-
-        public AvatarStat(string name, string userID, long vRAM, long vRAMActiveOnly)
-        {
-            Name = name;
-            UserID = userID;
-            VRAM = vRAM;
-            VRAMActiveOnly = vRAMActiveOnly;
-        }
-
-        public string VRAMString => VRAMCheckerInternal.ToByteString(VRAM);
-        public string VRAMActiveOnlyString => VRAMCheckerInternal.ToByteString(VRAMActiveOnly);
-    }
-
     public class VRAMCheckerInternal
     {
-        public const string Version = "1.0.5";
-
+        public const string Version = "1.0.6";
+        private static Regex AssetUrlRegex = new Regex("(file_[0-9A-Za-z-]+)\\/(\\d+)\\/file$");
+        public static MelonLogger.Instance LoggerInst;
         private static Dictionary<TextureFormat, int> BPP = new Dictionary<TextureFormat, int>()
         {
             { TextureFormat.Alpha8, 8},
@@ -94,39 +84,33 @@ namespace VRAMChecker
             { TextureFormat.RGB48, 16*3},
             { TextureFormat.RGBA64, 16*4}
         };
+        private static Dictionary<(string id, int version), long> AssetBundleTextures = new Dictionary<(string id, int version), long>();
 
-        private MelonLogger.Instance LoggerInst;
         private Dictionary<IntPtr, (Texture2D, bool)> textures = new Dictionary<IntPtr, (Texture2D, bool)>();
-        long VRAMSize = 0;
-        long VRAMSizeOnlyActive = 0;
-
-        public VRAMCheckerInternal(MelonLogger.Instance loggerInst)
-        {
-            LoggerInst = loggerInst;
-        }
+        private Result result = new Result();
+        private bool IgnoreNonActiveTextures = false;
+        private VRAMCheckerInternal() { }
 
 
 
-        public void LogInstance()
+        public static void LogInstance()
         {
             LoggerInst.Msg("Vram Sizes of Avatars in Lobby");
             List<AvatarStat> avatarstats = new List<AvatarStat>();
 
             foreach (Player player in PlayerManager.field_Private_Static_PlayerManager_0.field_Private_List_1_Player_0)
             {
-                var avatarGameobj = player._vrcplayer.field_Internal_GameObject_0;
-                GetSizeForGameObject(avatarGameobj);
-                avatarstats.Add(new AvatarStat(player.field_Private_APIUser_0.displayName, player.field_Private_APIUser_0.id, VRAMSize, VRAMSizeOnlyActive));
+                avatarstats.Add(GetSizeForPlayer(player));
             }
 
-            foreach (var stat in avatarstats.OrderByDescending(x => x.VRAM))
+            foreach (var stat in avatarstats.OrderByDescending(x => x.Result.VRAM))
             {
-                LoggerInst.Msg($"{stat.Name}({stat.UserID}) : Total: {stat.VRAMString} OnlyActive; {stat.VRAMActiveOnlyString}");
+                LoggerInst.Msg($"{stat.Name.Unidecode()}({stat.UserID}) : Total: {stat.VRAMString} OnlyActive; {stat.VRAMActiveOnlyString}");
             }
-            LoggerInst.Msg($"Total Avatars : Total: {ToByteString(avatarstats.Sum(x=>x.VRAM))} OnlyActive; {ToByteString(avatarstats.Sum(x=>x.VRAMActiveOnly))}");
+            LoggerInst.Msg($"Total Avatars : Total: {ToByteString(avatarstats.Sum(x => x.Result.VRAM))} OnlyActive; {ToByteString(avatarstats.Sum(x => x.Result.VRAMActiveOnly))}");
         }
 
-        public void LogWorld()
+        public static void LogWorld()
         {
             LoggerInst.Msg("Vram Sizes of World Objects");
             long sumVRamSize = 0;
@@ -136,21 +120,26 @@ namespace VRAMChecker
                 if (obj.GetComponent<Player>() != null)
                     continue;
 
-                var sizes = GetSizeForGameObject(obj);
-                sumVRamSize += VRAMSize;
-                sumVRamSizeOnlyActive += VRAMSizeOnlyActive;
+                var result = new VRAMCheckerInternal().GetSizeForGameObject(obj);
+                sumVRamSize += result.VRAM;
+                sumVRamSizeOnlyActive += result.VRAMActiveOnly;
 
-                LoggerInst.Msg($"{obj.name}: Total: {sizes.size} OnlyActive; {sizes.sizeOnlyActive}");
+                LoggerInst.Msg($"{obj.name}: Total: {result.VRAMString} OnlyActive; {result.VRAMActiveOnlyString}");
 
             }
             LoggerInst.Msg($"Sum: Total: {ToByteString(sumVRamSize)} OnlyActive; {ToByteString(sumVRamSizeOnlyActive)}");
         }
 
-        public (string size, string sizeOnlyActive) GetSizeForGameObject(GameObject avatar)
+        public static AvatarStat GetSizeForPlayer(Player player)
         {
-            VRAMSize = 0;
-            VRAMSizeOnlyActive = 0;
-            textures.Clear();
+            var avatarGameobj = player._vrcplayer.field_Internal_GameObject_0;
+            var result = new VRAMCheckerInternal() {IgnoreNonActiveTextures = true}.GetSizeForGameObject(avatarGameobj);
+            result.VRAMTexture = GetTextureSizeAssetBundle(player);
+            return new AvatarStat(player.field_Private_APIUser_0.displayName, player.field_Private_APIUser_0.id, result);
+        }
+
+        public Result GetSizeForGameObject(GameObject avatar)
+        {
             foreach (var item in avatar.GetComponentsInChildren<MeshRenderer>(true))
             {
                 GetSizeForRenderer(item);
@@ -169,7 +158,7 @@ namespace VRAMChecker
                 GetSizeForTexture(item.Value.Item1, item.Value.Item2);
             }
 
-            return (ToByteString(VRAMSize), ToByteString(VRAMSizeOnlyActive));
+            return result;
         }
 
         private void GetSizeForRenderer(SkinnedMeshRenderer renderer)
@@ -194,13 +183,16 @@ namespace VRAMChecker
             if (mesh == null) return;
             var total = Profiler.GetRuntimeMemorySizeLong(mesh);
             //LoggerInst.Msg($"DEBUG: Mesh: {mesh.name} Profiler.GetRuntimeMemorySizeLong(mesh): {total}");
-            VRAMSize += total;
+            result.VRAMMesh += total;
             if (isActive)
-                VRAMSizeOnlyActive += total;
+                result.VRAMMeshActiveOnly += total;
         }
 
         private void CollectMaterial(Material mat, bool isActive)
         {
+            if (!isActive && IgnoreNonActiveTextures)
+                return;
+
             if (mat == null) return;
             var texIds = mat.GetTexturePropertyNames();
             foreach (var id in texIds)
@@ -243,13 +235,117 @@ namespace VRAMChecker
                 return;
             }
 
-            double mipmaps = 1;
-            for (int i = 0; i < tex.mipmapCount; i++) mipmaps += Math.Pow(0.25, i + 1);
-            var bytesCount = (long)(BPP[textureFormat] * tex.width * tex.height * mipmaps / 8);
+            var bytesCount = GetSizeForTexture(BPP[textureFormat], tex.width, tex.height, tex.mipmapCount);
             //LoggerInst.Msg($"DEBUG: Texture {tex.name} {BPP[textureFormat]}  {tex.width}   {tex.height}   {mipmaps}  {tex.mipmapCount} -> {bytesCount}");
-            VRAMSize += bytesCount;
+            result.VRAMTexture += bytesCount;
             if (isActive)
-                VRAMSizeOnlyActive += bytesCount;
+                result.VRAMTextureActiveOnly += bytesCount;
+        }
+
+        private static long GetSizeForTexture(long bbp, long width, long height, int mipCount)
+        {
+            double mipmaps = 1;
+            for (int i = 0; i < mipCount; i++) mipmaps += Math.Pow(0.25, i + 1);
+
+            var bytesCount = bbp * width * height / 8L;
+            bytesCount = (long)(bytesCount * Math.Round(mipmaps, 6));
+            //LoggerInst.Msg($"DEBUG: Texture {tex.name} {BPP[textureFormat]}  {tex.width}   {tex.height}   {mipmaps}  {tex.mipmapCount} -> {bytesCount}");
+            return bytesCount;
+        }
+
+        public static long GetTextureSizeAssetBundle(Player player)
+        {
+            var match = AssetUrlRegex.Match(player.prop_ApiAvatar_0.assetUrl);
+            if(!match.Success)
+                return 0;
+
+            return GetTextureSizeAssetBundle(match.Groups[1].Value, Convert.ToInt32(match.Groups[2].Value));
+        }
+
+        private static long GetTextureSizeAssetBundle(string id, int version)
+        {
+            if (AssetBundleTextures.ContainsKey((id, version)))
+                return AssetBundleTextures[(id, version)];
+            try
+            {
+                var file = $"{AssetBundleDownloadManager.field_Private_Static_AssetBundleDownloadManager_0.field_Private_Cache_0.path}/{GetAssetId(id)}/{GetAssetVersion(version)}/__data";
+
+                if (!File.Exists(file))
+                {
+                    var folders = Directory.GetDirectories($"{AssetBundleDownloadManager.field_Private_Static_AssetBundleDownloadManager_0.field_Private_Cache_0.path}/{GetAssetId(id)}/");
+                    foreach (var folder in folders)
+                    {
+                        LoggerInst.Msg($"Instead of {GetAssetId(id)}/{GetAssetVersion(version)} found {Path.GetFileName(folder)}");
+                        file = folder+ "/__data";
+                    }
+                    
+                }
+
+                var am = new AssetsManager();
+                var bun = am.LoadBundleFile(DecompressAssetBundle(File.OpenRead(file)), "__data");
+                var assetInst = am.LoadAssetsFileFromBundle(bun, 0, true);
+                var totalsize = 0L;
+                foreach (var item in assetInst.table.GetAssetsOfType((int)AssetClassID.Texture2D))
+                {
+                    var test = am.GetTypeInstance(assetInst, item).GetBaseField();
+
+                    var bpp = BPP[(TextureFormat)test.Get("m_TextureFormat").value.AsInt()];
+                    var width = test.Get("m_Width").value.AsInt();
+                    var height = test.Get("m_Height").value.AsInt();
+                    var mipCount = test.Get("m_MipCount").value.AsInt();
+
+                    totalsize += GetSizeForTexture(bpp, width, height, mipCount);
+                }
+
+                LoggerInst.Msg($"Preloaded texture size for {GetAssetId(id)}/{GetAssetVersion(version)} with size {ToByteString(totalsize)}");
+                AssetBundleTextures[(id, version)] = totalsize;
+                return totalsize;
+            }
+            catch (Exception)
+            {
+                LoggerInst.Msg($"Failed to preload {GetAssetId(id)}/{GetAssetVersion(version)}");
+                return 0;
+            }
+        }
+
+        //https://github.com/Natsumi-sama/VRCX/blob/PyPyDanceCompanion/AssetBundleCacher.cs#L35
+        private static string GetAssetId(string id)
+        {
+            byte[] hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(id));
+            StringBuilder idHex = new StringBuilder(hash.Length * 2);
+            foreach (byte b in hash)
+            {
+                idHex.AppendFormat("{0:x2}", b);
+            }
+            return idHex.ToString().ToUpper().Substring(0, 16);
+        }
+
+        //https://github.com/Natsumi-sama/VRCX/blob/PyPyDanceCompanion/AssetBundleCacher.cs#L46
+        private static string GetAssetVersion(int version)
+        {
+            byte[] bytes = BitConverter.GetBytes(version);
+            string versionHex = String.Empty;
+            foreach (byte b in bytes)
+            {
+                versionHex += b.ToString("X2");
+            }
+            return versionHex.PadLeft(32, '0');
+        }
+
+        private static Stream DecompressAssetBundle(Stream stream)
+        {
+            //AssetTools doesnt recognize LZ4 Runtime so we manually decompress it
+            var file = new AssetBundleFile();
+            var resultStream = new MemoryStream();
+
+
+            file.Read(new AssetsFileReader(stream), true);
+            file.reader.Position = 0L;
+            file.Unpack(file.reader, new AssetsFileWriter(resultStream));
+
+            resultStream.Position = 0;
+
+            return resultStream;
         }
 
         public static string ToByteString(long l)
