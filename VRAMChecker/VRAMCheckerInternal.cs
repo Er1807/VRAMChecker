@@ -134,7 +134,7 @@ namespace VRAMChecker
         {
             var avatarGameobj = player._vrcplayer.field_Internal_GameObject_0;
             var result = new VRAMCheckerInternal() {IgnoreNonActiveTextures = true}.GetSizeForGameObject(avatarGameobj);
-            result.VRAMTexture = GetTextureSizeAssetBundle(player);
+            result.VRAMTexture = GetTextureSizeAssetBundle(player, true);
             return new AvatarStat(player.field_Private_APIUser_0.displayName, player.field_Private_APIUser_0.id, result);
         }
 
@@ -253,16 +253,16 @@ namespace VRAMChecker
             return bytesCount;
         }
 
-        public static long GetTextureSizeAssetBundle(Player player)
+        public static long GetTextureSizeAssetBundle(Player player, bool logMissingFile = false)
         {
             var match = AssetUrlRegex.Match(player.prop_ApiAvatar_0.assetUrl);
             if(!match.Success)
                 return 0;
 
-            return GetTextureSizeAssetBundle(match.Groups[1].Value, Convert.ToInt32(match.Groups[2].Value));
+            return GetTextureSizeAssetBundle(match.Groups[1].Value, Convert.ToInt32(match.Groups[2].Value), logMissingFile);
         }
 
-        private static long GetTextureSizeAssetBundle(string id, int version)
+        private static long GetTextureSizeAssetBundle(string id, int version, bool logMissingFile)
         {
             if (AssetBundleTextures.ContainsKey((id, version)))
                 return AssetBundleTextures[(id, version)];
@@ -272,13 +272,9 @@ namespace VRAMChecker
 
                 if (!File.Exists(file))
                 {
-                    var folders = Directory.GetDirectories($"{AssetBundleDownloadManager.field_Private_Static_AssetBundleDownloadManager_0.field_Private_Cache_0.path}/{GetAssetId(id)}/");
-                    foreach (var folder in folders)
-                    {
-                        LoggerInst.Msg($"Instead of {GetAssetId(id)}/{GetAssetVersion(version)} found {Path.GetFileName(folder)}");
-                        file = folder+ "/__data";
-                    }
-                    
+                    if(logMissingFile)
+                        LoggerInst.Msg($"Failed to load {GetAssetId(id)}/{GetAssetVersion(version)}");
+                    return 0;
                 }
 
                 var am = new AssetsManager();
@@ -303,7 +299,7 @@ namespace VRAMChecker
             }
             catch (Exception)
             {
-                LoggerInst.Msg($"Failed to preload {GetAssetId(id)}/{GetAssetVersion(version)}");
+                LoggerInst.Msg($"Failed to load {GetAssetId(id)}/{GetAssetVersion(version)}");
                 return 0;
             }
         }
