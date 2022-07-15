@@ -21,7 +21,7 @@ namespace VRAMChecker
 
     public class VRAMCheckerInternal
     {
-        public const string Version = "1.0.7";
+        public const string Version = "1.0.8";
         private static Regex AssetUrlRegex = new Regex("(file_[0-9A-Za-z-]+)\\/(\\d+)\\/file$");
         public static MelonLogger.Instance LoggerInst;
         private static Dictionary<TextureFormat, int> BPP = new Dictionary<TextureFormat, int>()
