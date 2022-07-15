@@ -7,7 +7,6 @@ using UnityEngine.Profiling;
 using UnityEngine.SceneManagement;
 using VRC;
 using System.Linq;
-using UnidecodeSharpFork;
 using System.IO;
 using AssetsTools.NET;
 using TextureFormat = UnityEngine.TextureFormat;
@@ -21,7 +20,7 @@ namespace VRAMChecker
 
     public class VRAMCheckerInternal
     {
-        public const string Version = "1.0.8";
+        public const string Version = "1.0.9";
         private static Regex AssetUrlRegex = new Regex("(file_[0-9A-Za-z-]+)\\/(\\d+)\\/file$");
         public static MelonLogger.Instance LoggerInst;
         private static Dictionary<TextureFormat, int> BPP = new Dictionary<TextureFormat, int>()
