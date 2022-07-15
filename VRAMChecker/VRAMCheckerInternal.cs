@@ -104,7 +104,7 @@ namespace VRAMChecker
 
             foreach (var stat in avatarstats.OrderByDescending(x => x.Result.VRAM))
             {
-                LoggerInst.Msg($"{stat.Name.Unidecode()}({stat.UserID}) : Total: {stat.VRAMString} OnlyActive; {stat.VRAMActiveOnlyString}");
+                LoggerInst.Msg($"{stat.Name}({stat.UserID}) : Total: {stat.VRAMString} OnlyActive; {stat.VRAMActiveOnlyString}");
             }
             LoggerInst.Msg($"Total Avatars : Total: {ToByteString(avatarstats.Sum(x => x.Result.VRAM))} OnlyActive; {ToByteString(avatarstats.Sum(x => x.Result.VRAMActiveOnly))}");
         }
