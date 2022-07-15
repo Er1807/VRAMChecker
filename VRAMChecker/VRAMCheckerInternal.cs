@@ -88,7 +88,6 @@ namespace VRAMChecker
 
         private Dictionary<IntPtr, (Texture2D, bool)> textures = new Dictionary<IntPtr, (Texture2D, bool)>();
         private Result result = new Result();
-        private bool IgnoreNonActiveTextures = false;
         private VRAMCheckerInternal() { }
 
 
@@ -133,8 +132,11 @@ namespace VRAMChecker
         public static AvatarStat GetSizeForPlayer(Player player)
         {
             var avatarGameobj = player._vrcplayer.field_Internal_GameObject_0;
-            var result = new VRAMCheckerInternal() {IgnoreNonActiveTextures = true}.GetSizeForGameObject(avatarGameobj);
-            result.VRAMTexture = GetTextureSizeAssetBundle(player, true);
+            
+            var result = new VRAMCheckerInternal().GetSizeForGameObject(avatarGameobj);
+            var texsize = GetTextureSizeAssetBundle(player, true);
+            if (texsize != 0)
+                result.VRAMTexture = texsize;
             return new AvatarStat(player.field_Private_APIUser_0.displayName, player.field_Private_APIUser_0.id, result);
         }
 
@@ -190,9 +192,6 @@ namespace VRAMChecker
 
         private void CollectMaterial(Material mat, bool isActive)
         {
-            if (!isActive && IgnoreNonActiveTextures)
-                return;
-
             if (mat == null) return;
             var texIds = mat.GetTexturePropertyNames();
             foreach (var id in texIds)
@@ -297,9 +296,11 @@ namespace VRAMChecker
                 AssetBundleTextures[(id, version)] = totalsize;
                 return totalsize;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                AssetBundleTextures[(id, version)] = 0;
                 LoggerInst.Msg($"Failed to load {GetAssetId(id)}/{GetAssetVersion(version)}");
+                LoggerInst.Error(ex);
                 return 0;
             }
         }
